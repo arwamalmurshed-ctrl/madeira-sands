@@ -719,7 +719,7 @@ export default function AdminPage() {
                             {getStatusLabel(booking.status)}
                           </span>
                         </div>
-                        <p className="text-sm text-stone-500">{booking.phone}</p>
+                        <a href={`https://wa.me/${booking.phone}`} target="_blank" rel="noopener noreferrer" className="text-sm text-green-600 hover:text-green-700 hover:underline">   {booking.phone} </a>
                         <div className="flex items-center gap-4 text-sm text-stone-600">
                           <span>من: {formatDate(booking.check_in)}</span>
                           <span>إلى: {formatDate(booking.check_out)}</span>
