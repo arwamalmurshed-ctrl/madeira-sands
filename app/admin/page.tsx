@@ -146,7 +146,9 @@ export default function AdminPage() {
     check_in: "",
     check_out: "",
     status: "pending" as BookingStatus,
-  })
+ deposit_amount: 0,
+deposit_paid: false,
+deposit_returned: false, })
   
   // Prices state
   const [prices, setPrices] = useState<Price[]>([])
@@ -302,7 +304,9 @@ export default function AdminPage() {
       check_in: booking.check_in,
       check_out: booking.check_out,
       status: booking.status,
-    })
+   deposit_amount: booking.deposit_amount || 0,
+deposit_paid: booking.deposit_paid || false,
+deposit_returned: booking.deposit_returned || false, })
     setShowBookingDialog(true)
   }
 
@@ -320,6 +324,9 @@ export default function AdminPage() {
           check_in: bookingForm.check_in,
           check_out: bookingForm.check_out,
           status: bookingForm.status,
+          deposit_amount: bookingForm.deposit_amount || 0,
+deposit_paid: bookingForm.deposit_paid || false,
+deposit_returned: bookingForm.deposit_returned || false,
           updated_at: new Date().toISOString(),
         }).eq("id", editingBooking.id)
       } else {
@@ -329,7 +336,9 @@ export default function AdminPage() {
           check_in: bookingForm.check_in,
           check_out: bookingForm.check_out,
           status: bookingForm.status,
-        })
+       deposit_amount: bookingForm.deposit_amount || 0,
+deposit_paid: bookingForm.deposit_paid || false,
+deposit_returned: bookingForm.deposit_returned || false, })
       }
 
       // Update date statuses for the booking range
