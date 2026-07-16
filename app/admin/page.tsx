@@ -1189,7 +1189,34 @@ export default function AdminPage() {
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setShowFacilityDialog(false)}>
-              إلغاء
+             <div>
+  <Label htmlFor="deposit">مبلغ التأمين</Label>
+  <Input
+    id="deposit"
+    type="number"
+    value={bookingForm.deposit_amount || 0}
+    onChange={(e) => setBookingForm({ ...bookingForm, deposit_amount: Number(e.target.value) })}
+    placeholder="0"
+  />
+</div>
+<div className="flex items-center gap-2">
+  <input
+    type="checkbox"
+    id="deposit_paid"
+    checked={bookingForm.deposit_paid || false}
+    onChange={(e) => setBookingForm({ ...bookingForm, deposit_paid: e.target.checked })}
+  />
+  <Label htmlFor="deposit_paid">تم دفع التأمين</Label>
+</div>
+<div className="flex items-center gap-2">
+  <input
+    type="checkbox"
+    id="deposit_returned"
+    checked={bookingForm.deposit_returned || false}
+    onChange={(e) => setBookingForm({ ...bookingForm, deposit_returned: e.target.checked })}
+  />
+  <Label htmlFor="deposit_returned">تم استرجاع التأمين</Label>
+</div> إلغاء
             </Button>
             <Button onClick={handleSaveFacility} disabled={saving} className="bg-stone-800 hover:bg-stone-700">
               {saving ? "جاري الحفظ..." : editingFacility ? "تحديث" : "إضافة"}
