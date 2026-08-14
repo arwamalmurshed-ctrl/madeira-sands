@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from "react"
 import { 
   ChevronLeft, ChevronRight, Plus, Trash2, Edit, LogOut, Calendar, DollarSign, 
   List, Save, X, FileText, Settings, Wifi, Car, Snowflake, Flower2,
-  Waves, BedDouble, Bath, Utensils, Coffee, Sofa, TreePalmIcon, GripVertical
+  Waves, BedDouble, Bath, Utensils, Coffee, Sofa, TreePalmIcon, GripVertical,
+  CheckCircle2, AlertCircle
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -36,9 +37,13 @@ interface Booking {
   id: string
   guest_name: string
   phone: string
+  price: number
   check_in: string
   check_out: string
   status: BookingStatus
+  deposit_amount?: number
+  deposit_paid?: boolean
+  deposit_returned?: boolean
 }
 
 interface Price {
@@ -143,12 +148,16 @@ export default function AdminPage() {
   const [bookingForm, setBookingForm] = useState({
     guest_name: "",
     phone: "",
+    price: 0,
     check_in: "",
     check_out: "",
     status: "pending" as BookingStatus,
- deposit_amount: 0,
-deposit_paid: false,
-deposit_returned: false, })
+    deposit_amount: 0,
+    deposit_paid: false,
+    deposit_returned: false,
+  })
+  // رسالة نجاح/فشل الحفظ - تظهر داخل نافذة الحجز نفسها
+  const [saveMessage, setSaveMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   
   // Prices state
   const [prices, setPrices] = useState<Price[]>([])
@@ -247,6 +256,24 @@ deposit_returned: false, })
 
   const { daysInMonth, startingDay } = getDaysInMonth(currentMonth)
 
+  // ===== حساب الإجمالي التلقائي (نفس منطق الإكسل: مجموع بسيط لعمود السعر) =====
+  // بدون خصومات أو ضرائب أو رسوم إضافية، وبدون احتساب حقول التأمين ضمن الإجمالي
+  const totalRevenue = bookings.reduce((sum, b) => sum + (b.price || 0), 0)
+
+  const revenueByMonth = bookings.reduce((acc: Record<string, number>, b) => {
+    if (!b.check_in) return acc
+    const monthKey = b.check_in.slice(0, 7) // "YYYY-MM"
+    acc[monthKey] = (acc[monthKey] || 0) + (b.price || 0)
+    return acc
+  }, {} as Record<string, number>)
+
+  const formatMonthKey = (key: string) => {
+    const [year, month] = key.split("-")
+    const monthIndex = parseInt(month, 10) - 1
+    return `${arabicMonths[monthIndex] || month} ${year}`
+  }
+  // ===========================================================================
+
   const getDateStatusFromStore = (day: number): BookingStatus => {
     const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
     const found = dateStatuses.find((s) => s.date === dateStr)
@@ -289,10 +316,15 @@ deposit_returned: false, })
     setBookingForm({
       guest_name: "",
       phone: "",
+      price: 0,
       check_in: "",
       check_out: "",
       status: "pending",
+      deposit_amount: 0,
+      deposit_paid: false,
+      deposit_returned: false,
     })
+    setSaveMessage(null)
     setShowBookingDialog(true)
   }
 
@@ -301,47 +333,82 @@ deposit_returned: false, })
     setBookingForm({
       guest_name: booking.guest_name,
       phone: booking.phone,
+      price: booking.price || 0,
       check_in: booking.check_in,
       check_out: booking.check_out,
       status: booking.status,
-   deposit_amount: booking.deposit_amount || 0,
-deposit_paid: booking.deposit_paid || false,
-deposit_returned: booking.deposit_returned || false, })
+      deposit_amount: booking.deposit_amount || 0,
+      deposit_paid: booking.deposit_paid || false,
+      deposit_returned: booking.deposit_returned || false,
+    })
+    setSaveMessage(null)
     setShowBookingDialog(true)
   }
 
   const handleSaveBooking = async () => {
     if (!bookingForm.guest_name || !bookingForm.phone || !bookingForm.check_in || !bookingForm.check_out) {
+      setSaveMessage({ type: "error", text: "الرجاء تعبئة كل الحقول المطلوبة (الاسم، الهاتف، تاريخ الوصول والمغادرة)" })
       return
     }
 
     setSaving(true)
+    setSaveMessage(null)
+
     try {
+      let saveError: { message: string } | null = null
+
       if (editingBooking) {
-        await supabase.from("bookings").update({
-          guest_name: bookingForm.guest_name,
-          phone: bookingForm.phone,
-          check_in: bookingForm.check_in,
-          check_out: bookingForm.check_out,
-          status: bookingForm.status,
-          deposit_amount: bookingForm.deposit_amount || 0,
-deposit_paid: bookingForm.deposit_paid || false,
-deposit_returned: bookingForm.deposit_returned || false,
-          updated_at: new Date().toISOString(),
-        }).eq("id", editingBooking.id)
+        const { error } = await supabase
+          .from("bookings")
+          .update({
+            guest_name: bookingForm.guest_name,
+            phone: bookingForm.phone,
+            price: bookingForm.price || 0,
+            check_in: bookingForm.check_in,
+            check_out: bookingForm.check_out,
+            status: bookingForm.status,
+            deposit_amount: bookingForm.deposit_amount || 0,
+            deposit_paid: bookingForm.deposit_paid || false,
+            deposit_returned: bookingForm.deposit_returned || false,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", editingBooking.id)
+          .select()
+        saveError = error
       } else {
-        await supabase.from("bookings").insert({
-          guest_name: bookingForm.guest_name,
-          phone: bookingForm.phone,
-          check_in: bookingForm.check_in,
-          check_out: bookingForm.check_out,
-          status: bookingForm.status,
-       deposit_amount: bookingForm.deposit_amount || 0,
-deposit_paid: bookingForm.deposit_paid || false,
-deposit_returned: bookingForm.deposit_returned || false, })
+        const { error } = await supabase
+          .from("bookings")
+          .insert({
+            guest_name: bookingForm.guest_name,
+            phone: bookingForm.phone,
+            price: bookingForm.price || 0,
+            check_in: bookingForm.check_in,
+            check_out: bookingForm.check_out,
+            status: bookingForm.status,
+            deposit_amount: bookingForm.deposit_amount || 0,
+            deposit_paid: bookingForm.deposit_paid || false,
+            deposit_returned: bookingForm.deposit_returned || false,
+          })
+          .select()
+        saveError = error
       }
 
-      // Update date statuses for the booking range
+      // ===== نقطة الحماية الأهم =====
+      // Supabase ما "يرمي" خطأ (throw) لو فشل الحفظ، يرجعه بس بحقل error
+      // فلازم نفحصه صراحة ونتوقف هنا لو فيه خطأ - عشان ما نقفل النافذة
+      // ولا نعتبر الحجز محفوظ إلا لو تأكدنا فعلياً إنه نجح
+      if (saveError) {
+        console.error("Error saving booking:", saveError)
+        setSaveMessage({
+          type: "error",
+          text: `فشل حفظ الحجز: ${saveError.message}. الحجز لم يُحفظ، حاول مرة أخرى.`,
+        })
+        setSaving(false)
+        return
+      }
+      // ================================
+
+      // تحديث حالة التواريخ فقط بعد التأكد من نجاح حفظ الحجز نفسه
       const start = new Date(bookingForm.check_in)
       const end = new Date(bookingForm.check_out)
       const datesToUpdate = []
@@ -357,9 +424,21 @@ deposit_returned: bookingForm.deposit_returned || false, })
       }
 
       await loadData()
-      setShowBookingDialog(false)
+      setSaveMessage({
+        type: "success",
+        text: editingBooking ? "تم تحديث الحجز بنجاح ✓" : "تم حفظ الحجز بنجاح ✓",
+      })
+      // نسكر النافذة بعد لحظة بسيطة عشان يشوف المستخدم رسالة النجاح
+      setTimeout(() => {
+        setShowBookingDialog(false)
+        setSaveMessage(null)
+      }, 700)
     } catch (error) {
       console.error("Error saving booking:", error)
+      setSaveMessage({
+        type: "error",
+        text: "حدث خطأ غير متوقع أثناء الحفظ. تأكد من اتصالك بالإنترنت وحاول مرة أخرى.",
+      })
     } finally {
       setSaving(false)
     }
@@ -369,7 +448,12 @@ deposit_returned: bookingForm.deposit_returned || false, })
     if (confirm("هل أنت متأكد من حذف هذا الحجز؟")) {
       setSaving(true)
       try {
-        await supabase.from("bookings").delete().eq("id", id)
+        const { error } = await supabase.from("bookings").delete().eq("id", id)
+        if (error) {
+          console.error("Error deleting booking:", error)
+          alert("فشل حذف الحجز: " + error.message)
+          return
+        }
         await loadData()
       } catch (error) {
         console.error("Error deleting booking:", error)
@@ -704,6 +788,28 @@ deposit_returned: bookingForm.deposit_returned || false, })
               </Button>
             </div>
 
+            {/* بطاقة الإجمالي التلقائي */}
+            <Card className="p-4 mb-6 bg-stone-800 text-white">
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <div>
+                  <p className="text-stone-300 text-sm">إجمالي كل الحجوزات</p>
+                  <p className="text-2xl font-bold">{totalRevenue.toLocaleString("ar-SA")} ر.س</p>
+                </div>
+                {Object.keys(revenueByMonth).length > 0 && (
+                  <div className="flex flex-wrap gap-2 text-sm">
+                    {Object.entries(revenueByMonth)
+                      .sort(([a], [b]) => a.localeCompare(b))
+                      .map(([month, total]) => (
+                        <div key={month} className="bg-stone-700 px-3 py-2 rounded-lg">
+                          <span className="text-stone-300">{formatMonthKey(month)}: </span>
+                          <span className="font-semibold">{total.toLocaleString("ar-SA")} ر.س</span>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            </Card>
+
             {bookings.length === 0 ? (
               <Card className="p-12 text-center">
                 <p className="text-stone-500">لا توجد حجوزات حالياً</p>
@@ -727,6 +833,11 @@ deposit_returned: bookingForm.deposit_returned || false, })
                           >
                             {getStatusLabel(booking.status)}
                           </span>
+                          {booking.price > 0 && (
+                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-stone-100 text-stone-700">
+                              {booking.price.toLocaleString("ar-SA")} ر.س
+                            </span>
+                          )}
                         </div>
                         <a href={`https://wa.me/${booking.phone}`} target="_blank" rel="noopener noreferrer" className="text-sm text-green-600 hover:text-green-700 hover:underline">   {booking.phone} </a>
                         <div className="flex items-center gap-4 text-sm text-stone-600">
@@ -1091,6 +1202,24 @@ deposit_returned: bookingForm.deposit_returned || false, })
             <DialogTitle>{editingBooking ? "تعديل الحجز" : "إضافة حجز جديد"}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
+            {/* رسالة نجاح أو فشل الحفظ */}
+            {saveMessage && (
+              <div
+                className={`flex items-center gap-2 p-3 rounded-lg text-sm ${
+                  saveMessage.type === "success"
+                    ? "bg-green-50 text-green-800"
+                    : "bg-red-50 text-red-800"
+                }`}
+              >
+                {saveMessage.type === "success" ? (
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                )}
+                <span>{saveMessage.text}</span>
+              </div>
+            )}
+
             <div>
               <Label htmlFor="guestName">اسم الضيف</Label>
               <Input
@@ -1108,6 +1237,16 @@ deposit_returned: bookingForm.deposit_returned || false, })
                 onChange={(e) => setBookingForm({ ...bookingForm, phone: e.target.value })}
                 placeholder="05xxxxxxxx"
                 dir="ltr"
+              />
+            </div>
+            <div>
+              <Label htmlFor="price">السعر (ر.س)</Label>
+              <Input
+                id="price"
+                type="number"
+                value={bookingForm.price || 0}
+                onChange={(e) => setBookingForm({ ...bookingForm, price: Number(e.target.value) })}
+                placeholder="0"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -1145,6 +1284,36 @@ deposit_returned: bookingForm.deposit_returned || false, })
                   <SelectItem value="available">متاح</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* حقول التأمين - كانت بالغلط داخل نافذة المرافق، انتقلت هنا لمكانها الصحيح */}
+            <div>
+              <Label htmlFor="deposit">مبلغ التأمين</Label>
+              <Input
+                id="deposit"
+                type="number"
+                value={bookingForm.deposit_amount || 0}
+                onChange={(e) => setBookingForm({ ...bookingForm, deposit_amount: Number(e.target.value) })}
+                placeholder="0"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="deposit_paid"
+                checked={bookingForm.deposit_paid || false}
+                onChange={(e) => setBookingForm({ ...bookingForm, deposit_paid: e.target.checked })}
+              />
+              <Label htmlFor="deposit_paid">تم دفع التأمين</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="deposit_returned"
+                checked={bookingForm.deposit_returned || false}
+                onChange={(e) => setBookingForm({ ...bookingForm, deposit_returned: e.target.checked })}
+              />
+              <Label htmlFor="deposit_returned">تم استرجاع التأمين</Label>
             </div>
           </div>
           <DialogFooter className="gap-2">
@@ -1198,34 +1367,7 @@ deposit_returned: bookingForm.deposit_returned || false, })
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setShowFacilityDialog(false)}>
-             <div>
-  <Label htmlFor="deposit">مبلغ التأمين</Label>
-  <Input
-    id="deposit"
-    type="number"
-    value={bookingForm.deposit_amount || 0}
-    onChange={(e) => setBookingForm({ ...bookingForm, deposit_amount: Number(e.target.value) })}
-    placeholder="0"
-  />
-</div>
-<div className="flex items-center gap-2">
-  <input
-    type="checkbox"
-    id="deposit_paid"
-    checked={bookingForm.deposit_paid || false}
-    onChange={(e) => setBookingForm({ ...bookingForm, deposit_paid: e.target.checked })}
-  />
-  <Label htmlFor="deposit_paid">تم دفع التأمين</Label>
-</div>
-<div className="flex items-center gap-2">
-  <input
-    type="checkbox"
-    id="deposit_returned"
-    checked={bookingForm.deposit_returned || false}
-    onChange={(e) => setBookingForm({ ...bookingForm, deposit_returned: e.target.checked })}
-  />
-  <Label htmlFor="deposit_returned">تم استرجاع التأمين</Label>
-</div> إلغاء
+              إلغاء
             </Button>
             <Button onClick={handleSaveFacility} disabled={saving} className="bg-stone-800 hover:bg-stone-700">
               {saving ? "جاري الحفظ..." : editingFacility ? "تحديث" : "إضافة"}
