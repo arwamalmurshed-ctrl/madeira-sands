@@ -300,7 +300,22 @@ const confirmedThisMonth = bookings.filter(
     if (dayBookings.length === 1) {
       if (!dayBookings[0].guest_name) {
         // حجز موجود لكن بدون اسم ضيف (بيانات ناقصة) - افتحي نموذج التعديل مباشرة للإكمال
-        handleEditBooking(dayBookings[0])
+        // ونعبّي السعر والتأمين تلقائياً حسب اليوم لو كانوا فاضيين بالحجز الناقص
+        const existing = dayBookings[0]
+        setEditingBooking(existing)
+        setBookingForm({
+          guest_name: existing.guest_name || "",
+          phone: existing.phone || "",
+          check_in: existing.check_in,
+          check_out: existing.check_out,
+          status: existing.status,
+          price: existing.price || getDefaultPriceForDate(existing.check_in),
+          deposit_amount: existing.deposit_amount || DEFAULT_DEPOSIT,
+          deposit_paid: existing.deposit_paid || false,
+          deposit_returned: existing.deposit_returned || false,
+        })
+        setSaveMessage(null)
+        setShowBookingDialog(true)
       } else {
         setSelectedBookingInfo(dayBookings[0])
         setShowBookingInfoDialog(true)
