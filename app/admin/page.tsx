@@ -298,8 +298,13 @@ const confirmedThisMonth = bookings.filter(
     const dateStr = `${bookingsMonth.getFullYear()}-${String(bookingsMonth.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
     const dayBookings = getBookingsForDate(dateStr)
     if (dayBookings.length === 1) {
-      setSelectedBookingInfo(dayBookings[0])
-      setShowBookingInfoDialog(true)
+      if (!dayBookings[0].guest_name) {
+        // حجز موجود لكن بدون اسم ضيف (بيانات ناقصة) - افتحي نموذج التعديل مباشرة للإكمال
+        handleEditBooking(dayBookings[0])
+      } else {
+        setSelectedBookingInfo(dayBookings[0])
+        setShowBookingInfoDialog(true)
+      }
     } else if (dayBookings.length > 1) {
       setBookingsForSelectedDay(dayBookings)
       setShowBookingListDialog(true)
