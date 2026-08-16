@@ -303,6 +303,22 @@ const confirmedThisMonth = bookings.filter(
     } else if (dayBookings.length > 1) {
       setBookingsForSelectedDay(dayBookings)
       setShowBookingListDialog(true)
+    } else {
+      // ما فيه حجز بهذا اليوم بعد - افتحي نموذج إضافة حجز جديد جاهز بالتاريخ والسعر والتأمين
+      setEditingBooking(null)
+      setBookingForm({
+        guest_name: "",
+        phone: "",
+        check_in: dateStr,
+        check_out: dateStr,
+        status: "pending",
+        price: getDefaultPriceForDate(dateStr),
+        deposit_amount: DEFAULT_DEPOSIT,
+        deposit_paid: false,
+        deposit_returned: false,
+      })
+      setSaveMessage(null)
+      setShowBookingDialog(true)
     }
   }
 
