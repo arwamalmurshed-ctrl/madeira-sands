@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { 
   ChevronLeft, ChevronRight, Plus, Trash2, Edit, LogOut, Calendar, DollarSign, 
   List, Save, X, FileText, Settings, Wifi, Car, Snowflake, Flower2,
-  Waves, BedDouble, Bath, Utensils, Coffee, Sofa, TreePalmIcon, GripVertical,TrendingUp, Users, Clock, LayoutDashboard
+  Waves, BedDouble, Bath, Utensils, Coffee, Sofa, TreePalmIcon, GripVertical,TrendingUp, Users, Clock, LayoutDashboard, ClipboardCopy
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -71,6 +71,9 @@ const arabicMonths = [
 
 // Arabic day abbreviations
 const arabicDays = ["س", "ح", "ن", "ث", "ر", "خ", "ج"]
+
+// Full Arabic day names (same week order as arabicDays: starts Saturday)
+const arabicFullDayNames = ["السبت", "الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة"]
 
 // Available icons for facilities
 const availableIcons = [
@@ -156,6 +159,7 @@ const [activeTab, setActiveTab] = useState<"dashboard" | "calendar" | "bookings"
     deposit_returned: false,
   })
   const [saveMessage, setSaveMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
+  const [confirmationCopied, setConfirmationCopied] = useState(false)
   
   // Prices state
   const [prices, setPrices] = useState<Price[]>([])
@@ -337,6 +341,38 @@ const confirmedThisMonth = bookings.filter(
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr)
     return `${date.getDate()} ${arabicMonths[date.getMonth()]} ${date.getFullYear()}`
+  }
+
+  const getArabicDayName = (dateStr: string) => {
+    const date = new Date(dateStr)
+    let idx = date.getDay() + 1
+    if (idx === 7) idx = 0
+    return arabicFullDayNames[idx]
+  }
+
+  const generateConfirmationMessage = (booking: Booking) => {
+    const dayName = getArabicDayName(booking.check_in)
+    const dateFormatted = booking.check_in.split("-").join("/")
+    const remaining = (booking.price || 0) - (booking.deposit_amount || 0)
+    return `تم تأكيد حجزكم :
+يوم: ${dayName}
+${dateFormatted}
+علماً أنه متبقي مبلغ الايجار ( ${remaining} )ريال
+يتم تحويله قبل الدخول للشاليه في يوم حجزكم
+مع جزيل الشكر 🌹🌹
+ال${booking.deposit_amount || 0} عربون وراح تكون تأمين نسترجعه لكم بعد الخروج من الشاليه`
+  }
+
+  const handleCopyConfirmation = async (booking: Booking) => {
+    const message = generateConfirmationMessage(booking)
+    try {
+      await navigator.clipboard.writeText(message)
+      setConfirmationCopied(true)
+      setTimeout(() => setConfirmationCopied(false), 2500)
+    } catch (error) {
+      console.error("Error copying message:", error)
+      alert("تعذر نسخ الرسالة، حاول مرة أخرى")
+    }
   }
 
   const handleAddBooking = () => {
@@ -1525,7 +1561,19 @@ const confirmedThisMonth = bookings.filter(
         </div>
       </div>
     )}
-    <DialogFooter className="gap-2">
+    <DialogFooter className="gap-2 flex-wrap">
+      <Button
+        variant="outline"
+        className="text-green-600 hover:text-green-700 hover:bg-green-50"
+        onClick={() => {
+          if (selectedBookingInfo) {
+            handleCopyConfirmation(selectedBookingInfo)
+          }
+        }}
+      >
+        <ClipboardCopy className="w-4 h-4" />
+        {confirmationCopied ? "تم النسخ ✓" : "نسخ رسالة التأكيد"}
+      </Button>
       <Button
         variant="outline"
         className="text-red-600 hover:text-red-700 hover:bg-red-50"
