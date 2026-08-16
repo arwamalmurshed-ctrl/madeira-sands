@@ -350,6 +350,14 @@ const confirmedThisMonth = bookings.filter(
     return arabicFullDayNames[idx]
   }
 
+  // الأسعار الثابتة: الخميس والجمعة 790، وبقية الأيام 690. التأمين ثابت 300 لكل الحجوزات
+  const DEFAULT_DEPOSIT = 300
+  const getDefaultPriceForDate = (dateStr: string) => {
+    if (!dateStr) return 0
+    const day = new Date(dateStr).getDay() // 4 = الخميس، 5 = الجمعة
+    return day === 4 || day === 5 ? 790 : 690
+  }
+
   const generateConfirmationMessage = (booking: Booking) => {
     const dayName = getArabicDayName(booking.check_in)
     const dateFormatted = booking.check_in.split("-").join("/")
@@ -1378,7 +1386,15 @@ ${dateFormatted}
                   id="checkIn"
                   type="date"
                   value={bookingForm.check_in}
-                  onChange={(e) => setBookingForm({ ...bookingForm, check_in: e.target.value })}
+                  onChange={(e) => {
+                    const newDate = e.target.value
+                    setBookingForm({
+                      ...bookingForm,
+                      check_in: newDate,
+                      price: getDefaultPriceForDate(newDate),
+                      deposit_amount: DEFAULT_DEPOSIT,
+                    })
+                  }}
                 />
               </div>
               <div>
