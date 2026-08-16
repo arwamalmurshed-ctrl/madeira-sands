@@ -436,6 +436,24 @@ ${dateFormatted}
     setShowBookingDialog(true)
   }
 
+  // إضافة حجز ثاني لنفس اليوم (لما يكون فيه حجز موجود أصلاً بهذا التاريخ)، مع تعبئة السعر والتأمين تلقائياً
+  const handleAddSecondBooking = (dateStr: string) => {
+    setEditingBooking(null)
+    setBookingForm({
+      guest_name: "",
+      phone: "",
+      check_in: dateStr,
+      check_out: dateStr,
+      status: "pending",
+      price: getDefaultPriceForDate(dateStr),
+      deposit_amount: DEFAULT_DEPOSIT,
+      deposit_paid: false,
+      deposit_returned: false,
+    })
+    setSaveMessage(null)
+    setShowBookingDialog(true)
+  }
+
   const handleEditBooking = (booking: Booking) => {
     setEditingBooking(booking)
     setBookingForm({
@@ -1541,7 +1559,7 @@ ${dateFormatted}
             setShowBookingInfoDialog(true)
           }}
         >
-          <span className="font-semibold text-stone-800">{booking.guest_name}</span>
+          <span className="font-semibold text-stone-800">{booking.guest_name || "بدون اسم"}</span>
           <span
             className={`px-2 py-1 rounded-full text-xs font-medium ${
               booking.status === "available"
@@ -1555,6 +1573,19 @@ ${dateFormatted}
           </span>
         </Button>
       ))}
+      {bookingsForSelectedDay.length > 0 && (
+        <Button
+          variant="outline"
+          className="text-stone-600 hover:text-stone-700 hover:bg-stone-100"
+          onClick={() => {
+            handleAddSecondBooking(bookingsForSelectedDay[0].check_in)
+            setShowBookingListDialog(false)
+          }}
+        >
+          <Plus className="w-4 h-4" />
+          إضافة حجز آخر لنفس اليوم
+        </Button>
+      )}
     </div>
   </DialogContent>
 </Dialog>{/* Booking Info Dialog (from calendar click) */}
@@ -1614,6 +1645,19 @@ ${dateFormatted}
       </div>
     )}
     <DialogFooter className="gap-2 flex-wrap">
+      <Button
+        variant="outline"
+        className="text-stone-600 hover:text-stone-700 hover:bg-stone-100"
+        onClick={() => {
+          if (selectedBookingInfo) {
+            handleAddSecondBooking(selectedBookingInfo.check_in)
+            setShowBookingInfoDialog(false)
+          }
+        }}
+      >
+        <Plus className="w-4 h-4" />
+        إضافة حجز ثاني لنفس اليوم
+      </Button>
       <Button
         variant="outline"
         className="text-green-600 hover:text-green-700 hover:bg-green-50"
