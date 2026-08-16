@@ -597,8 +597,8 @@ export default function HomePage() {
           </div>
 
           <div className="border-t border-stone-800 mt-8 pt-8 text-center text-sm text-stone-500">
-            <p>© {new Date().getFullYear()} {chaletName}. {content.footer_rights || "جميع الحقوق محفوظة"}</p>
-          </div>
+          <p>© 2026 Madeira Sands. All rights reserved - Operated by BADER ABDULLAH SALEH ALAJAJI</p>
+          <p className="mt-1">Contact Number: +966590444411</p></div>
         </div>
       </footer>
     </div>
