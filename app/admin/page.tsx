@@ -150,10 +150,12 @@ const [activeTab, setActiveTab] = useState<"dashboard" | "calendar" | "bookings"
     check_in: "",
     check_out: "",
     status: "pending" as BookingStatus,
+    price: 0,
     deposit_amount: 0,
     deposit_paid: false,
     deposit_returned: false,
   })
+  const [saveMessage, setSaveMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   
   // Prices state
   const [prices, setPrices] = useState<Price[]>([])
@@ -181,7 +183,7 @@ const [showBookingListDialog, setShowBookingListDialog] = useState(false)
 
   // Check if already authenticated
   useEffect(() => {
-    const auth = sessionStorage.getItem("madeira_admin_auth")
+    const auth = localStorage.getItem("madeira_admin_auth")
     if (auth === "true") {
       setIsAuthenticated(true)
     }
@@ -232,7 +234,7 @@ const [showBookingListDialog, setShowBookingListDialog] = useState(false)
     e.preventDefault()
     if (password === ADMIN_PASSWORD) {
       setIsAuthenticated(true)
-      sessionStorage.setItem("madeira_admin_auth", "true")
+      localStorage.setItem("madeira_admin_auth", "true")
       setPasswordError(false)
     } else {
       setPasswordError(true)
@@ -241,7 +243,7 @@ const [showBookingListDialog, setShowBookingListDialog] = useState(false)
 
   const handleLogout = () => {
     setIsAuthenticated(false)
-    sessionStorage.removeItem("madeira_admin_auth")
+    localStorage.removeItem("madeira_admin_auth")
   }
 
   const getDaysInMonth = (date: Date) => {
@@ -345,10 +347,12 @@ const confirmedThisMonth = bookings.filter(
       check_in: "",
       check_out: "",
       status: "pending",
+      price: 0,
       deposit_amount: 0,
       deposit_paid: false,
       deposit_returned: false,
     })
+    setSaveMessage(null)
     setShowBookingDialog(true)
   }
 
@@ -360,43 +364,60 @@ const confirmedThisMonth = bookings.filter(
       check_in: booking.check_in,
       check_out: booking.check_out,
       status: booking.status,
+      price: booking.price || 0,
       deposit_amount: booking.deposit_amount || 0,
       deposit_paid: booking.deposit_paid || false,
       deposit_returned: booking.deposit_returned || false,
     })
+    setSaveMessage(null)
     setShowBookingDialog(true)
   }
 
   const handleSaveBooking = async () => {
     if (!bookingForm.guest_name || !bookingForm.phone || !bookingForm.check_in || !bookingForm.check_out) {
+      setSaveMessage({ type: "error", text: "الرجاء تعبئة كل الحقول المطلوبة (الاسم، الهاتف، تاريخ الوصول والمغادرة)" })
       return
     }
 
     setSaving(true)
+    setSaveMessage(null)
     try {
+      let saveError: { message: string } | null = null
+
       if (editingBooking) {
-        await supabase.from("bookings").update({
+        const { error } = await supabase.from("bookings").update({
           guest_name: bookingForm.guest_name,
           phone: bookingForm.phone,
           check_in: bookingForm.check_in,
           check_out: bookingForm.check_out,
           status: bookingForm.status,
+          price: bookingForm.price || 0,
           deposit_amount: bookingForm.deposit_amount || 0,
           deposit_paid: bookingForm.deposit_paid || false,
           deposit_returned: bookingForm.deposit_returned || false,
           updated_at: new Date().toISOString(),
-        }).eq("id", editingBooking.id)
+        }).eq("id", editingBooking.id).select()
+        saveError = error
       } else {
-        await supabase.from("bookings").insert({
+        const { error } = await supabase.from("bookings").insert({
           guest_name: bookingForm.guest_name,
           phone: bookingForm.phone,
           check_in: bookingForm.check_in,
           check_out: bookingForm.check_out,
           status: bookingForm.status,
+          price: bookingForm.price || 0,
           deposit_amount: bookingForm.deposit_amount || 0,
           deposit_paid: bookingForm.deposit_paid || false,
           deposit_returned: bookingForm.deposit_returned || false,
-        })
+        }).select()
+        saveError = error
+      }
+
+      if (saveError) {
+        console.error("Error saving booking:", saveError)
+        setSaveMessage({ type: "error", text: `فشل حفظ الحجز: ${saveError.message}. الحجز لم يُحفظ، حاول مرة أخرى.` })
+        setSaving(false)
+        return
       }
 
       // Update date statuses for the booking range
@@ -415,9 +436,14 @@ const confirmedThisMonth = bookings.filter(
       }
 
       await loadData()
-      setShowBookingDialog(false)
+      setSaveMessage({ type: "success", text: editingBooking ? "تم تحديث الحجز بنجاح ✓" : "تم حفظ الحجز بنجاح ✓" })
+      setTimeout(() => {
+        setShowBookingDialog(false)
+        setSaveMessage(null)
+      }, 700)
     } catch (error) {
       console.error("Error saving booking:", error)
+      setSaveMessage({ type: "error", text: "حدث خطأ غير متوقع أثناء الحفظ. تأكد من اتصالك بالإنترنت وحاول مرة أخرى." })
     } finally {
       setSaving(false)
     }
@@ -1328,6 +1354,27 @@ const confirmedThisMonth = bookings.filter(
                   onChange={(e) => setBookingForm({ ...bookingForm, check_out: e.target.value })}
                 />
               </div>
+            </div>
+            <div>
+              {saveMessage && (
+                <div
+                  className={`flex items-center gap-2 p-3 rounded-lg text-sm mb-4 ${
+                    saveMessage.type === "success" ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"
+                  }`}
+                >
+                  <span>{saveMessage.text}</span>
+                </div>
+              )}
+            </div>
+            <div>
+              <Label htmlFor="price">السعر (ر.س)</Label>
+              <Input
+                id="price"
+                type="number"
+                value={bookingForm.price || 0}
+                onChange={(e) => setBookingForm({ ...bookingForm, price: Number(e.target.value) })}
+                placeholder="0"
+              />
             </div>
             <div>
               <Label htmlFor="status">الحالة</Label>
