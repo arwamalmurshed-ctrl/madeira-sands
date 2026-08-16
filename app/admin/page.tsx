@@ -4,8 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { 
   ChevronLeft, ChevronRight, Plus, Trash2, Edit, LogOut, Calendar, DollarSign, 
   List, Save, X, FileText, Settings, Wifi, Car, Snowflake, Flower2,
-  Waves, BedDouble, Bath, Utensils, Coffee, Sofa, TreePalmIcon, GripVertical,
-  CheckCircle2, AlertCircle
+  Waves, BedDouble, Bath, Utensils, Coffee, Sofa, TreePalmIcon, GripVertical,TrendingUp, Users, Clock, LayoutDashboard
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -37,13 +36,13 @@ interface Booking {
   id: string
   guest_name: string
   phone: string
-  price: number
   check_in: string
   check_out: string
   status: BookingStatus
   deposit_amount?: number
   deposit_paid?: boolean
   deposit_returned?: boolean
+  price?: number
 }
 
 interface Price {
@@ -132,9 +131,9 @@ export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [password, setPassword] = useState("")
   const [passwordError, setPasswordError] = useState(false)
-  const [activeTab, setActiveTab] = useState<"calendar" | "bookings" | "prices" | "content" | "facilities">("calendar")
-  const [saving, setSaving] = useState(false)
-  
+const [activeTab, setActiveTab] = useState<"dashboard" | "calendar" | "bookings" | "prices" | "content" | "facilities">("dashboard") 
+ const [saving, setSaving] = useState(false)
+
   // Calendar state
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [dateStatuses, setDateStatuses] = useState<{ date: string; status: BookingStatus }[]>([])
@@ -148,7 +147,6 @@ export default function AdminPage() {
   const [bookingForm, setBookingForm] = useState({
     guest_name: "",
     phone: "",
-    price: 0,
     check_in: "",
     check_out: "",
     status: "pending" as BookingStatus,
@@ -156,8 +154,6 @@ export default function AdminPage() {
     deposit_paid: false,
     deposit_returned: false,
   })
-  // رسالة نجاح/فشل الحفظ - تظهر داخل نافذة الحجز نفسها
-  const [saveMessage, setSaveMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   
   // Prices state
   const [prices, setPrices] = useState<Price[]>([])
@@ -170,6 +166,11 @@ export default function AdminPage() {
   // Facilities state
   const [facilities, setFacilities] = useState<Facility[]>([])
   const [showFacilityDialog, setShowFacilityDialog] = useState(false)
+  const [bookingsMonth, setBookingsMonth] = useState(new Date())
+const [selectedBookingInfo, setSelectedBookingInfo] = useState<Booking | null>(null)
+const [showBookingInfoDialog, setShowBookingInfoDialog] = useState(false)
+const [bookingsForSelectedDay, setBookingsForSelectedDay] = useState<Booking[]>([])
+const [showBookingListDialog, setShowBookingListDialog] = useState(false)
   const [editingFacility, setEditingFacility] = useState<Facility | null>(null)
   const [facilityForm, setFacilityForm] = useState({
     icon: "pool",
@@ -180,7 +181,7 @@ export default function AdminPage() {
 
   // Check if already authenticated
   useEffect(() => {
-    const auth = localStorage.getItem("madeira_admin_auth")
+    const auth = sessionStorage.getItem("madeira_admin_auth")
     if (auth === "true") {
       setIsAuthenticated(true)
     }
@@ -231,7 +232,7 @@ export default function AdminPage() {
     e.preventDefault()
     if (password === ADMIN_PASSWORD) {
       setIsAuthenticated(true)
-      localStorage.setItem("madeira_admin_auth", "true")
+      sessionStorage.setItem("madeira_admin_auth", "true")
       setPasswordError(false)
     } else {
       setPasswordError(true)
@@ -240,7 +241,7 @@ export default function AdminPage() {
 
   const handleLogout = () => {
     setIsAuthenticated(false)
-    localStorage.removeItem("madeira_admin_auth")
+    sessionStorage.removeItem("madeira_admin_auth")
   }
 
   const getDaysInMonth = (date: Date) => {
@@ -255,24 +256,49 @@ export default function AdminPage() {
   }
 
   const { daysInMonth, startingDay } = getDaysInMonth(currentMonth)
+  // Dashboard stats
+const todayStr = new Date().toISOString().split("T")[0]
+const todaysBookings = bookings.filter((b) => todayStr >= b.check_in && todayStr <= b.check_out)
 
-  // ===== حساب الإجمالي التلقائي (نفس منطق الإكسل: مجموع بسيط لعمود السعر) =====
-  // بدون خصومات أو ضرائب أو رسوم إضافية، وبدون احتساب حقول التأمين ضمن الإجمالي
-  const totalRevenue = bookings.reduce((sum, b) => sum + (b.price || 0), 0)
+const thisMonthStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`
+const thisMonthRevenue = bookings
+  .filter((b) => b.check_in.startsWith(thisMonthStr))
+  .reduce((sum, b) => sum + (b.price || 0), 0)
 
-  const revenueByMonth = bookings.reduce((acc: Record<string, number>, b) => {
-    if (!b.check_in) return acc
-    const monthKey = b.check_in.slice(0, 7) // "YYYY-MM"
-    acc[monthKey] = (acc[monthKey] || 0) + (b.price || 0)
-    return acc
-  }, {} as Record<string, number>)
+const thisMonthDays = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate()
+const bookedDaysThisMonth = dateStatuses.filter(
+  (d) => d.date.startsWith(thisMonthStr) && d.status === "confirmed"
+).length
+const occupancyRate = thisMonthDays > 0 ? Math.round((bookedDaysThisMonth / thisMonthDays) * 100) : 0
 
-  const formatMonthKey = (key: string) => {
-    const [year, month] = key.split("-")
-    const monthIndex = parseInt(month, 10) - 1
-    return `${arabicMonths[monthIndex] || month} ${year}`
+const in7Days = new Date()
+in7Days.setDate(in7Days.getDate() + 7)
+const in7DaysStr = in7Days.toISOString().split("T")[0]
+const upcomingBookings = bookings
+  .filter((b) => b.check_in >= todayStr && b.check_in <= in7DaysStr)
+  .sort((a, b) => a.check_in.localeCompare(b.check_in))
+
+const unpaidDeposits = bookings.filter(
+  (b) => b.status === "confirmed" && b.deposit_amount && b.deposit_amount > 0 && !b.deposit_paid
+)
+const confirmedThisMonth = bookings.filter(
+  (b) => b.check_in.startsWith(thisMonthStr) && b.status === "confirmed"
+)
+  const getBookingsForDate = (dateStr: string): Booking[] => {
+    return bookings.filter((b) => dateStr >= b.check_in && dateStr <= b.check_out)
   }
-  // ===========================================================================
+  
+  const handleBookingsDayClick = (day: number) => {
+    const dateStr = `${bookingsMonth.getFullYear()}-${String(bookingsMonth.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+    const dayBookings = getBookingsForDate(dateStr)
+    if (dayBookings.length === 1) {
+      setSelectedBookingInfo(dayBookings[0])
+      setShowBookingInfoDialog(true)
+    } else if (dayBookings.length > 1) {
+      setBookingsForSelectedDay(dayBookings)
+      setShowBookingListDialog(true)
+    }
+  }
 
   const getDateStatusFromStore = (day: number): BookingStatus => {
     const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
@@ -316,7 +342,6 @@ export default function AdminPage() {
     setBookingForm({
       guest_name: "",
       phone: "",
-      price: 0,
       check_in: "",
       check_out: "",
       status: "pending",
@@ -324,7 +349,6 @@ export default function AdminPage() {
       deposit_paid: false,
       deposit_returned: false,
     })
-    setSaveMessage(null)
     setShowBookingDialog(true)
   }
 
@@ -333,7 +357,6 @@ export default function AdminPage() {
     setBookingForm({
       guest_name: booking.guest_name,
       phone: booking.phone,
-      price: booking.price || 0,
       check_in: booking.check_in,
       check_out: booking.check_out,
       status: booking.status,
@@ -341,74 +364,42 @@ export default function AdminPage() {
       deposit_paid: booking.deposit_paid || false,
       deposit_returned: booking.deposit_returned || false,
     })
-    setSaveMessage(null)
     setShowBookingDialog(true)
   }
 
   const handleSaveBooking = async () => {
     if (!bookingForm.guest_name || !bookingForm.phone || !bookingForm.check_in || !bookingForm.check_out) {
-      setSaveMessage({ type: "error", text: "الرجاء تعبئة كل الحقول المطلوبة (الاسم، الهاتف، تاريخ الوصول والمغادرة)" })
       return
     }
 
     setSaving(true)
-    setSaveMessage(null)
-
     try {
-      let saveError: { message: string } | null = null
-
       if (editingBooking) {
-        const { error } = await supabase
-          .from("bookings")
-          .update({
-            guest_name: bookingForm.guest_name,
-            phone: bookingForm.phone,
-            price: bookingForm.price || 0,
-            check_in: bookingForm.check_in,
-            check_out: bookingForm.check_out,
-            status: bookingForm.status,
-            deposit_amount: bookingForm.deposit_amount || 0,
-            deposit_paid: bookingForm.deposit_paid || false,
-            deposit_returned: bookingForm.deposit_returned || false,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", editingBooking.id)
-          .select()
-        saveError = error
+        await supabase.from("bookings").update({
+          guest_name: bookingForm.guest_name,
+          phone: bookingForm.phone,
+          check_in: bookingForm.check_in,
+          check_out: bookingForm.check_out,
+          status: bookingForm.status,
+          deposit_amount: bookingForm.deposit_amount || 0,
+          deposit_paid: bookingForm.deposit_paid || false,
+          deposit_returned: bookingForm.deposit_returned || false,
+          updated_at: new Date().toISOString(),
+        }).eq("id", editingBooking.id)
       } else {
-        const { error } = await supabase
-          .from("bookings")
-          .insert({
-            guest_name: bookingForm.guest_name,
-            phone: bookingForm.phone,
-            price: bookingForm.price || 0,
-            check_in: bookingForm.check_in,
-            check_out: bookingForm.check_out,
-            status: bookingForm.status,
-            deposit_amount: bookingForm.deposit_amount || 0,
-            deposit_paid: bookingForm.deposit_paid || false,
-            deposit_returned: bookingForm.deposit_returned || false,
-          })
-          .select()
-        saveError = error
-      }
-
-      // ===== نقطة الحماية الأهم =====
-      // Supabase ما "يرمي" خطأ (throw) لو فشل الحفظ، يرجعه بس بحقل error
-      // فلازم نفحصه صراحة ونتوقف هنا لو فيه خطأ - عشان ما نقفل النافذة
-      // ولا نعتبر الحجز محفوظ إلا لو تأكدنا فعلياً إنه نجح
-      if (saveError) {
-        console.error("Error saving booking:", saveError)
-        setSaveMessage({
-          type: "error",
-          text: `فشل حفظ الحجز: ${saveError.message}. الحجز لم يُحفظ، حاول مرة أخرى.`,
+        await supabase.from("bookings").insert({
+          guest_name: bookingForm.guest_name,
+          phone: bookingForm.phone,
+          check_in: bookingForm.check_in,
+          check_out: bookingForm.check_out,
+          status: bookingForm.status,
+          deposit_amount: bookingForm.deposit_amount || 0,
+          deposit_paid: bookingForm.deposit_paid || false,
+          deposit_returned: bookingForm.deposit_returned || false,
         })
-        setSaving(false)
-        return
       }
-      // ================================
 
-      // تحديث حالة التواريخ فقط بعد التأكد من نجاح حفظ الحجز نفسه
+      // Update date statuses for the booking range
       const start = new Date(bookingForm.check_in)
       const end = new Date(bookingForm.check_out)
       const datesToUpdate = []
@@ -424,21 +415,9 @@ export default function AdminPage() {
       }
 
       await loadData()
-      setSaveMessage({
-        type: "success",
-        text: editingBooking ? "تم تحديث الحجز بنجاح ✓" : "تم حفظ الحجز بنجاح ✓",
-      })
-      // نسكر النافذة بعد لحظة بسيطة عشان يشوف المستخدم رسالة النجاح
-      setTimeout(() => {
-        setShowBookingDialog(false)
-        setSaveMessage(null)
-      }, 700)
+      setShowBookingDialog(false)
     } catch (error) {
       console.error("Error saving booking:", error)
-      setSaveMessage({
-        type: "error",
-        text: "حدث خطأ غير متوقع أثناء الحفظ. تأكد من اتصالك بالإنترنت وحاول مرة أخرى.",
-      })
     } finally {
       setSaving(false)
     }
@@ -448,12 +427,7 @@ export default function AdminPage() {
     if (confirm("هل أنت متأكد من حذف هذا الحجز؟")) {
       setSaving(true)
       try {
-        const { error } = await supabase.from("bookings").delete().eq("id", id)
-        if (error) {
-          console.error("Error deleting booking:", error)
-          alert("فشل حذف الحجز: " + error.message)
-          return
-        }
+        await supabase.from("bookings").delete().eq("id", id)
         await loadData()
       } catch (error) {
         console.error("Error deleting booking:", error)
@@ -632,17 +606,28 @@ export default function AdminPage() {
       <div className="bg-white border-b border-stone-200 overflow-x-auto">
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex gap-2">
-            <button
-              onClick={() => setActiveTab("calendar")}
-              className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === "calendar"
-                  ? "border-stone-800 text-stone-800"
-                  : "border-transparent text-stone-500 hover:text-stone-700"
-              }`}
-            >
-              <Calendar className="w-4 h-4" />
-              التقويم
-            </button>
+          <button
+  onClick={() => setActiveTab("dashboard")}
+  className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors whitespace-nowrap ${
+    activeTab === "dashboard"
+      ? "border-stone-800 text-stone-800"
+      : "border-transparent text-stone-500 hover:text-stone-700"
+  }`}
+>
+  <LayoutDashboard className="w-4 h-4" />
+  الرئيسية
+</button>
+<button
+  onClick={() => setActiveTab("calendar")}
+  className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors whitespace-nowrap ${
+    activeTab === "calendar"
+      ? "border-stone-800 text-stone-800"
+      : "border-transparent text-stone-500 hover:text-stone-700"
+  }`}
+>
+  <Calendar className="w-4 h-4" />
+  التقويم
+</button>
             <button
               onClick={() => setActiveTab("bookings")}
               className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors whitespace-nowrap ${
@@ -693,7 +678,106 @@ export default function AdminPage() {
 
       {/* Content */}
       <main className="max-w-7xl mx-auto px-4 py-8">
-        {/* Calendar Tab */}
+        {/* Dashboard Tab */}
+{activeTab === "dashboard" && (
+  <div className="space-y-6">
+    <h2 className="text-xl font-semibold text-stone-800">نظرة عامة</h2>
+
+    {/* Stat cards grid */}
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <Card className="p-5">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm text-stone-500">حجوزات اليوم</span>
+          <Calendar className="w-5 h-5 text-stone-400" />
+        </div>
+        <p className="text-2xl font-bold text-stone-800">{todaysBookings.length}</p>
+      </Card>
+      <Card className="p-5">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm text-stone-500">إيرادات الشهر</span>
+          <DollarSign className="w-5 h-5 text-stone-400" />
+        </div>
+        <p className="text-2xl font-bold text-stone-800">{thisMonthRevenue.toLocaleString()} ر.س</p>
+      </Card>
+      <Card className="p-5">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm text-stone-500">نسبة الإشغال</span>
+          <TrendingUp className="w-5 h-5 text-stone-400" />
+        </div>
+        <p className="text-2xl font-bold text-stone-800">{occupancyRate}%</p>
+      </Card>
+      <Card
+  className="p-5 cursor-pointer hover:ring-2 hover:ring-stone-300 transition-all"
+  onClick={() => {
+    if (confirmedThisMonth.length > 0) {
+      setBookingsForSelectedDay(confirmedThisMonth)
+      setShowBookingListDialog(true)
+    }
+  }}
+>
+  <div className="flex items-center justify-between mb-2">
+    <span className="text-sm text-stone-500">حجوزات مؤكدة هذا الشهر</span>
+    <Users className="w-5 h-5 text-stone-400" />
+  </div>
+  <p className="text-2xl font-bold text-stone-800">{confirmedThisMonth.length}</p>
+</Card>
+    </div>
+
+    {/* Upcoming bookings */}
+    <Card className="p-6">
+      <div className="flex items-center gap-2 mb-4">
+        <Clock className="w-5 h-5 text-stone-600" />
+        <h3 className="text-lg font-semibold text-stone-800">حجوزات قادمة (خلال 7 أيام)</h3>
+      </div>
+      {upcomingBookings.length === 0 ? (
+        <p className="text-stone-500 text-sm">لا توجد حجوزات قادمة خلال الأسبوع القادم</p>
+      ) : (
+        <div className="space-y-3">
+          {upcomingBookings.map((booking) => (
+            <div key={booking.id} className="flex items-center justify-between p-3 bg-stone-50 rounded-lg">
+              <div>
+                <p className="font-medium text-stone-800">{booking.guest_name}</p>
+                <p className="text-sm text-stone-500">{formatDate(booking.check_in)}</p>
+              </div>
+              <span
+                className={`px-2 py-1 rounded-full text-xs font-medium ${
+                  booking.status === "available"
+                    ? "bg-green-100 text-green-800"
+                    : booking.status === "pending"
+                    ? "bg-amber-100 text-amber-800"
+                    : "bg-red-100 text-red-800"
+                }`}
+              >
+                {getStatusLabel(booking.status)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+
+    {/* Unpaid deposits */}
+    {unpaidDeposits.length > 0 && (
+      <Card className="p-6 border-amber-200 bg-amber-50">
+        <div className="flex items-center gap-2 mb-4">
+          <DollarSign className="w-5 h-5 text-amber-700" />
+          <h3 className="text-lg font-semibold text-amber-900">تأمينات غير مدفوعة</h3>
+        </div>
+        <div className="space-y-3">
+          {unpaidDeposits.map((booking) => (
+            <div key={booking.id} className="flex items-center justify-between p-3 bg-white rounded-lg">
+              <div>
+                <p className="font-medium text-stone-800">{booking.guest_name}</p>
+                <p className="text-sm text-stone-500">{formatDate(booking.check_in)}</p>
+              </div>
+              <span className="font-semibold text-amber-700">{booking.deposit_amount} ر.س</span>
+            </div>
+          ))}
+        </div>
+      </Card>
+    )}
+  </div>
+)}{/* Calendar Tab */}
         {activeTab === "calendar" && (
           <div>
             <Card className="p-6">
@@ -778,100 +862,104 @@ export default function AdminPage() {
         )}
 
         {/* Bookings Tab */}
-        {activeTab === "bookings" && (
-          <div>
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-stone-800">قائمة الحجوزات</h2>
-              <Button onClick={handleAddBooking} className="gap-2 bg-stone-800 hover:bg-stone-700">
-                <Plus className="w-4 h-4" />
-                إضافة حجز
-              </Button>
-            </div>
+{activeTab === "bookings" && (
+  <div>
+    <Card className="p-6">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-semibold text-stone-800">قائمة الحجوزات</h2>
+        <Button onClick={handleAddBooking} className="gap-2 bg-stone-800 hover:bg-stone-700">
+          <Plus className="w-4 h-4" />
+          إضافة حجز
+        </Button>
+      </div>
 
-            {/* بطاقة الإجمالي التلقائي */}
-            <Card className="p-4 mb-6 bg-stone-800 text-white">
-              <div className="flex items-center justify-between flex-wrap gap-4">
-                <div>
-                  <p className="text-stone-300 text-sm">إجمالي كل الحجوزات</p>
-                  <p className="text-2xl font-bold">{totalRevenue.toLocaleString("ar-SA")} ر.س</p>
-                </div>
-                {Object.keys(revenueByMonth).length > 0 && (
-                  <div className="flex flex-wrap gap-2 text-sm">
-                    {Object.entries(revenueByMonth)
-                      .sort(([a], [b]) => a.localeCompare(b))
-                      .map(([month, total]) => (
-                        <div key={month} className="bg-stone-700 px-3 py-2 rounded-lg">
-                          <span className="text-stone-300">{formatMonthKey(month)}: </span>
-                          <span className="font-semibold">{total.toLocaleString("ar-SA")} ر.س</span>
-                        </div>
-                      ))}
-                  </div>
-                )}
-              </div>
-            </Card>
+      {/* Calendar Header */}
+      <div className="flex items-center justify-between mb-6">
+        <button
+          onClick={() => setBookingsMonth(new Date(bookingsMonth.getFullYear(), bookingsMonth.getMonth() - 1))}
+          className="p-2 hover:bg-stone-100 rounded-full transition-colors"
+        >
+          <ChevronRight className="w-5 h-5 text-stone-600" />
+        </button>
+        <h3 className="text-xl font-semibold text-stone-800">
+          {arabicMonths[bookingsMonth.getMonth()]} {bookingsMonth.getFullYear()}
+        </h3>
+        <button
+          onClick={() => setBookingsMonth(new Date(bookingsMonth.getFullYear(), bookingsMonth.getMonth() + 1))}
+          className="p-2 hover:bg-stone-100 rounded-full transition-colors"
+        >
+          <ChevronLeft className="w-5 h-5 text-stone-600" />
+        </button>
+      </div>
 
-            {bookings.length === 0 ? (
-              <Card className="p-12 text-center">
-                <p className="text-stone-500">لا توجد حجوزات حالياً</p>
-              </Card>
-            ) : (
-              <div className="space-y-4">
-                {bookings.map((booking) => (
-                  <Card key={booking.id} className="p-4">
-                    <div className="flex items-start justify-between flex-wrap gap-4">
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-3">
-                          <h3 className="font-semibold text-stone-800">{booking.guest_name}</h3>
-                          <span
-                            className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              booking.status === "available"
-                                ? "bg-green-100 text-green-800"
-                                : booking.status === "pending"
-                                ? "bg-amber-100 text-amber-800"
-                                : "bg-red-100 text-red-800"
-                            }`}
-                          >
-                            {getStatusLabel(booking.status)}
-                          </span>
-                          {booking.price > 0 && (
-                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-stone-100 text-stone-700">
-                              {booking.price.toLocaleString("ar-SA")} ر.س
-                            </span>
-                          )}
-                        </div>
-                        <a href={`https://wa.me/${booking.phone}`} target="_blank" rel="noopener noreferrer" className="text-sm text-green-600 hover:text-green-700 hover:underline">   {booking.phone} </a>
-                        <div className="flex items-center gap-4 text-sm text-stone-600">
-                          <span>من: {formatDate(booking.check_in)}</span>
-                          <span>إلى: {formatDate(booking.check_out)}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEditBooking(booking)}
-                          className="gap-1"
-                        >
-                          <Edit className="w-4 h-4" />
-                          تعديل
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDeleteBooking(booking.id)}
-                          className="gap-1 text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          حذف
-                        </Button>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            )}
+      {/* Day Headers */}
+      <div className="grid grid-cols-7 gap-1 mb-2">
+        {arabicDays.map((day) => (
+          <div key={day} className="text-center text-sm font-medium text-stone-500 py-2">
+            {day}
           </div>
-        )}
+        ))}
+      </div>
+
+      {/* Calendar Grid */}
+      {(() => {
+        const { daysInMonth: bDaysInMonth, startingDay: bStartingDay } = getDaysInMonth(bookingsMonth)
+        const getDayStatus = (day: number): BookingStatus => {
+          const dateStr = `${bookingsMonth.getFullYear()}-${String(bookingsMonth.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+          const found = dateStatuses.find((s) => s.date === dateStr)
+          return found?.status || "available"
+        }
+        return (
+          <div className="grid grid-cols-7 gap-1">
+            {Array.from({ length: bStartingDay }).map((_, i) => (
+              <div key={`empty-${i}`} className="aspect-square" />
+            ))}
+            {Array.from({ length: bDaysInMonth }).map((_, i) => {
+              const day = i + 1
+              const status = getDayStatus(day)
+
+              return (
+                <button
+                  key={day}
+                  onClick={() => handleBookingsDayClick(day)}
+                  className={`
+                    aspect-square rounded-lg flex flex-col items-center justify-center text-sm font-medium transition-all
+                    hover:ring-2 hover:ring-stone-400 cursor-pointer relative
+                    ${status === "available" ? "bg-green-100 text-green-800 hover:bg-green-200" : ""}
+                    ${status === "pending" ? "bg-amber-100 text-amber-800 hover:bg-amber-200" : ""}
+                    ${status === "confirmed" ? "bg-red-100 text-red-800 hover:bg-red-200" : ""}
+                  `}
+                >
+                  <span>{day}</span>
+                  <div className={`w-2 h-2 rounded-full mt-1 ${getStatusColor(status)}`} />
+                </button>
+              )
+            })}
+          </div>
+        )
+      })()}
+
+      {/* Legend */}
+      <div className="flex items-center justify-center gap-6 mt-6 text-sm">
+        <div className="flex items-center gap-2">
+          <div className={`w-3 h-3 rounded-full ${getStatusColor("available")}`} />
+          <span className="text-stone-600">متاح</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className={`w-3 h-3 rounded-full ${getStatusColor("pending")}`} />
+          <span className="text-stone-600">قيد التأكيد</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className={`w-3 h-3 rounded-full ${getStatusColor("confirmed")}`} />
+          <span className="text-stone-600">محجوز</span>
+        </div>
+      </div>
+
+      <p className="text-center text-sm text-stone-500 mt-4">اضغط على أي يوم فيه حجز لعرض تفاصيله</p>
+    </Card>
+  </div>
+)}
+
 
         {/* Prices Tab */}
         {activeTab === "prices" && (
@@ -1202,24 +1290,6 @@ export default function AdminPage() {
             <DialogTitle>{editingBooking ? "تعديل الحجز" : "إضافة حجز جديد"}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            {/* رسالة نجاح أو فشل الحفظ */}
-            {saveMessage && (
-              <div
-                className={`flex items-center gap-2 p-3 rounded-lg text-sm ${
-                  saveMessage.type === "success"
-                    ? "bg-green-50 text-green-800"
-                    : "bg-red-50 text-red-800"
-                }`}
-              >
-                {saveMessage.type === "success" ? (
-                  <CheckCircle2 className="w-4 h-4 shrink-0" />
-                ) : (
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                )}
-                <span>{saveMessage.text}</span>
-              </div>
-            )}
-
             <div>
               <Label htmlFor="guestName">اسم الضيف</Label>
               <Input
@@ -1237,16 +1307,6 @@ export default function AdminPage() {
                 onChange={(e) => setBookingForm({ ...bookingForm, phone: e.target.value })}
                 placeholder="05xxxxxxxx"
                 dir="ltr"
-              />
-            </div>
-            <div>
-              <Label htmlFor="price">السعر (ر.س)</Label>
-              <Input
-                id="price"
-                type="number"
-                value={bookingForm.price || 0}
-                onChange={(e) => setBookingForm({ ...bookingForm, price: Number(e.target.value) })}
-                placeholder="0"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -1286,7 +1346,7 @@ export default function AdminPage() {
               </Select>
             </div>
 
-            {/* حقول التأمين - كانت بالغلط داخل نافذة المرافق، انتقلت هنا لمكانها الصحيح */}
+            {/* Deposit / Insurance fields */}
             <div>
               <Label htmlFor="deposit">مبلغ التأمين</Label>
               <Input
@@ -1327,7 +1387,126 @@ export default function AdminPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Facility Dialog */}
+      {/* Booking List Dialog (when multiple bookings same day) */}
+<Dialog open={showBookingListDialog} onOpenChange={setShowBookingListDialog}>
+  <DialogContent className="sm:max-w-md" dir="rtl">
+    <DialogHeader>
+      <DialogTitle>اختر الحجز</DialogTitle>
+      <DialogDescription>يوجد أكثر من حجز بهذا التاريخ</DialogDescription>
+    </DialogHeader>
+    <div className="grid gap-3 py-4">
+      {bookingsForSelectedDay.map((booking) => (
+        <Button
+          key={booking.id}
+          variant="outline"
+          className="justify-between h-auto py-3"
+          onClick={() => {
+            setSelectedBookingInfo(booking)
+            setShowBookingListDialog(false)
+            setShowBookingInfoDialog(true)
+          }}
+        >
+          <span className="font-semibold text-stone-800">{booking.guest_name}</span>
+          <span
+            className={`px-2 py-1 rounded-full text-xs font-medium ${
+              booking.status === "available"
+                ? "bg-green-100 text-green-800"
+                : booking.status === "pending"
+                ? "bg-amber-100 text-amber-800"
+                : "bg-red-100 text-red-800"
+            }`}
+          >
+            {getStatusLabel(booking.status)}
+          </span>
+        </Button>
+      ))}
+    </div>
+  </DialogContent>
+</Dialog>{/* Booking Info Dialog (from calendar click) */}
+<Dialog open={showBookingInfoDialog} onOpenChange={setShowBookingInfoDialog}>
+  <DialogContent className="sm:max-w-md" dir="rtl">
+    <DialogHeader>
+      <DialogTitle>تفاصيل الحجز</DialogTitle>
+    </DialogHeader>
+    {selectedBookingInfo && (
+      <div className="space-y-3 py-2">
+        <div className="flex items-center justify-between">
+          <span className="text-stone-500 text-sm">اسم الضيف</span>
+          <span className="font-semibold text-stone-800">{selectedBookingInfo.guest_name}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-stone-500 text-sm">رقم الهاتف</span>
+          {selectedBookingInfo.phone ? (
+            <a
+              href={`https://wa.me/${selectedBookingInfo.phone}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-green-600 hover:underline"
+            >
+              {selectedBookingInfo.phone}
+            </a>
+          ) : (
+            <span className="text-stone-400">—</span>
+          )}
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-stone-500 text-sm">من</span>
+          <span className="text-stone-800">{formatDate(selectedBookingInfo.check_in)}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-stone-500 text-sm">إلى</span>
+          <span className="text-stone-800">{formatDate(selectedBookingInfo.check_out)}</span>
+        </div>
+        <div className="flex items-center justify-between">
+  <span className="text-stone-500 text-sm">السعر</span>
+  <span className="font-semibold text-stone-800">
+    {selectedBookingInfo.price ? `${selectedBookingInfo.price} ر.س` : "—"}
+  </span>
+</div><div className="flex items-center justify-between">
+          <span className="text-stone-500 text-sm">الحالة</span>
+          <span
+            className={`px-2 py-1 rounded-full text-xs font-medium ${
+              selectedBookingInfo.status === "available"
+                ? "bg-green-100 text-green-800"
+                : selectedBookingInfo.status === "pending"
+                ? "bg-amber-100 text-amber-800"
+                : "bg-red-100 text-red-800"
+            }`}
+          >
+            {getStatusLabel(selectedBookingInfo.status)}
+          </span>
+        </div>
+      </div>
+    )}
+    <DialogFooter className="gap-2">
+      <Button
+        variant="outline"
+        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+        onClick={() => {
+          if (selectedBookingInfo) {
+            handleDeleteBooking(selectedBookingInfo.id)
+            setShowBookingInfoDialog(false)
+          }
+        }}
+      >
+        <Trash2 className="w-4 h-4" />
+        حذف
+      </Button>
+      <Button
+        className="bg-stone-800 hover:bg-stone-700"
+        onClick={() => {
+          if (selectedBookingInfo) {
+            handleEditBooking(selectedBookingInfo)
+            setShowBookingInfoDialog(false)
+          }
+        }}
+      >
+        <Edit className="w-4 h-4" />
+        تعديل
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>{/* Facility Dialog */}
       <Dialog open={showFacilityDialog} onOpenChange={setShowFacilityDialog}>
         <DialogContent className="sm:max-w-md" dir="rtl">
           <DialogHeader>
