@@ -180,7 +180,7 @@ export default function AdminPage() {
 
   // Check if already authenticated
   useEffect(() => {
-    const auth = sessionStorage.getItem("madeira_admin_auth")
+    const auth = localStorage.getItem("madeira_admin_auth")
     if (auth === "true") {
       setIsAuthenticated(true)
     }
@@ -231,7 +231,7 @@ export default function AdminPage() {
     e.preventDefault()
     if (password === ADMIN_PASSWORD) {
       setIsAuthenticated(true)
-      sessionStorage.setItem("madeira_admin_auth", "true")
+      localStorage.setItem("madeira_admin_auth", "true")
       setPasswordError(false)
     } else {
       setPasswordError(true)
@@ -240,7 +240,7 @@ export default function AdminPage() {
 
   const handleLogout = () => {
     setIsAuthenticated(false)
-    sessionStorage.removeItem("madeira_admin_auth")
+    localStorage.removeItem("madeira_admin_auth")
   }
 
   const getDaysInMonth = (date: Date) => {
