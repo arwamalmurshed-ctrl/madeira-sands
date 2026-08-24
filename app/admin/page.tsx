@@ -397,7 +397,8 @@ const confirmedThisMonth = bookings.filter(
   const generateConfirmationMessage = (booking: Booking) => {
     const dayName = getArabicDayName(booking.check_in)
     const dateFormatted = booking.check_in.split("-").join("/")
-    const remaining = (booking.price || 0) - (booking.deposit_amount || 0)
+    // مبلغ التأمين منفصل تماماً عن سعر الإيجار (عربون يصير تأمين مسترجع لاحقاً) - لا يُخصم من السعر
+    const remaining = booking.price || 0
     return `تم تأكيد حجزكم :
 يوم: ${dayName}
 ${dateFormatted}
