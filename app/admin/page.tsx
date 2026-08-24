@@ -1624,7 +1624,10 @@ ${dateFormatted}
             setShowBookingInfoDialog(true)
           }}
         >
-          <span className="font-semibold text-stone-800">{booking.guest_name || "بدون اسم"}</span>
+          <div className="flex flex-col items-start gap-1">
+            <span className="font-semibold text-stone-800">{booking.guest_name || "بدون اسم"}</span>
+            <span className="text-xs text-stone-500">{booking.price ? `${booking.price} ر.س` : "بدون سعر"}</span>
+          </div>
           <span
             className={`px-2 py-1 rounded-full text-xs font-medium ${
               booking.status === "available"
