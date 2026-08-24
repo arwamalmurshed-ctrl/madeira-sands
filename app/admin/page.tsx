@@ -1486,8 +1486,8 @@ ${dateFormatted}
                     setBookingForm({
                       ...bookingForm,
                       check_in: newDate,
-                      price: getDefaultPriceForDate(newDate),
-                      deposit_amount: DEFAULT_DEPOSIT,
+                      price: bookingForm.is_blogger ? 0 : getDefaultPriceForDate(newDate),
+                      deposit_amount: bookingForm.is_blogger ? 0 : DEFAULT_DEPOSIT,
                     })
                   }}
                 />
@@ -1513,16 +1513,18 @@ ${dateFormatted}
                 </div>
               )}
             </div>
-            <div>
-              <Label htmlFor="price">السعر (ر.س)</Label>
-              <Input
-                id="price"
-                type="number"
-                value={bookingForm.price || 0}
-                onChange={(e) => setBookingForm({ ...bookingForm, price: Number(e.target.value) })}
-                placeholder="0"
-              />
-            </div>
+            {!bookingForm.is_blogger && (
+              <div>
+                <Label htmlFor="price">السعر (ر.س)</Label>
+                <Input
+                  id="price"
+                  type="number"
+                  value={bookingForm.price || 0}
+                  onChange={(e) => setBookingForm({ ...bookingForm, price: Number(e.target.value) })}
+                  placeholder="0"
+                />
+              </div>
+            )}
             <div>
               <Label htmlFor="status">الحالة</Label>
               <Select
@@ -1545,40 +1547,52 @@ ${dateFormatted}
                 type="checkbox"
                 id="is_blogger"
                 checked={bookingForm.is_blogger || false}
-                onChange={(e) => setBookingForm({ ...bookingForm, is_blogger: e.target.checked })}
+                onChange={(e) => {
+                  const checked = e.target.checked
+                  setBookingForm({
+                    ...bookingForm,
+                    is_blogger: checked,
+                    price: checked ? 0 : getDefaultPriceForDate(bookingForm.check_in),
+                    deposit_amount: checked ? 0 : DEFAULT_DEPOSIT,
+                  })
+                }}
               />
-              <Label htmlFor="is_blogger" className="text-purple-800">حجز بلوقر / معلن (تسويقي)</Label>
+              <Label htmlFor="is_blogger" className="text-purple-800">حجز بلوقر / معلن (تسويقي - بدون مقابل مادي)</Label>
             </div>
 
-            {/* Deposit / Insurance fields */}
-            <div>
-              <Label htmlFor="deposit">مبلغ التأمين</Label>
-              <Input
-                id="deposit"
-                type="number"
-                value={bookingForm.deposit_amount || 0}
-                onChange={(e) => setBookingForm({ ...bookingForm, deposit_amount: Number(e.target.value) })}
-                placeholder="0"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="deposit_paid"
-                checked={bookingForm.deposit_paid || false}
-                onChange={(e) => setBookingForm({ ...bookingForm, deposit_paid: e.target.checked })}
-              />
-              <Label htmlFor="deposit_paid">تم دفع التأمين</Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="deposit_returned"
-                checked={bookingForm.deposit_returned || false}
-                onChange={(e) => setBookingForm({ ...bookingForm, deposit_returned: e.target.checked })}
-              />
-              <Label htmlFor="deposit_returned">تم استرجاع التأمين</Label>
-            </div>
+            {/* Deposit / Insurance fields - مخفية للحجوزات المجانية (بلوقرز) */}
+            {!bookingForm.is_blogger && (
+              <>
+                <div>
+                  <Label htmlFor="deposit">مبلغ التأمين</Label>
+                  <Input
+                    id="deposit"
+                    type="number"
+                    value={bookingForm.deposit_amount || 0}
+                    onChange={(e) => setBookingForm({ ...bookingForm, deposit_amount: Number(e.target.value) })}
+                    placeholder="0"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="deposit_paid"
+                    checked={bookingForm.deposit_paid || false}
+                    onChange={(e) => setBookingForm({ ...bookingForm, deposit_paid: e.target.checked })}
+                  />
+                  <Label htmlFor="deposit_paid">تم دفع التأمين</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="deposit_returned"
+                    checked={bookingForm.deposit_returned || false}
+                    onChange={(e) => setBookingForm({ ...bookingForm, deposit_returned: e.target.checked })}
+                  />
+                  <Label htmlFor="deposit_returned">تم استرجاع التأمين</Label>
+                </div>
+              </>
+            )}
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setShowBookingDialog(false)}>
