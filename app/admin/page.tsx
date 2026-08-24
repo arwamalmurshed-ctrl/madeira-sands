@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { 
   ChevronLeft, ChevronRight, Plus, Trash2, Edit, LogOut, Calendar, DollarSign, 
   List, Save, X, FileText, Settings, Wifi, Car, Snowflake, Flower2,
-  Waves, BedDouble, Bath, Utensils, Coffee, Sofa, TreePalmIcon, GripVertical,TrendingUp, Users, Clock, LayoutDashboard, ClipboardCopy
+  Waves, BedDouble, Bath, Utensils, Coffee, Sofa, TreePalmIcon, GripVertical,TrendingUp, Users, Clock, LayoutDashboard, ClipboardCopy, Megaphone
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -43,6 +43,7 @@ interface Booking {
   deposit_paid?: boolean
   deposit_returned?: boolean
   price?: number
+  is_blogger?: boolean
 }
 
 interface Price {
@@ -157,6 +158,7 @@ const [activeTab, setActiveTab] = useState<"dashboard" | "calendar" | "bookings"
     deposit_amount: 0,
     deposit_paid: false,
     deposit_returned: false,
+    is_blogger: false,
   })
   const [saveMessage, setSaveMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const [confirmationCopied, setConfirmationCopied] = useState(false)
@@ -290,6 +292,11 @@ const unpaidDeposits = bookings.filter(
 const confirmedThisMonth = bookings.filter(
   (b) => b.check_in.startsWith(thisMonthStr) && b.status === "confirmed"
 )
+  // إحصائيات البلوقرز/المعلنين: عدد هذا الشهر + الإجمالي الكلي
+  const bloggersThisMonth = bookings.filter(
+    (b) => b.is_blogger && b.check_in.startsWith(thisMonthStr)
+  )
+  const bloggersAllTime = bookings.filter((b) => b.is_blogger)
   const getBookingsForDate = (dateStr: string): Booking[] => {
     return bookings.filter((b) => dateStr >= b.check_in && dateStr <= b.check_out)
   }
@@ -313,6 +320,7 @@ const confirmedThisMonth = bookings.filter(
           deposit_amount: existing.deposit_amount || DEFAULT_DEPOSIT,
           deposit_paid: existing.deposit_paid || false,
           deposit_returned: existing.deposit_returned || false,
+          is_blogger: existing.is_blogger || false,
         })
         setSaveMessage(null)
         setShowBookingDialog(true)
@@ -432,6 +440,7 @@ ${dateFormatted}
       deposit_amount: 0,
       deposit_paid: false,
       deposit_returned: false,
+      is_blogger: false,
     })
     setSaveMessage(null)
     setShowBookingDialog(true)
@@ -450,6 +459,7 @@ ${dateFormatted}
       deposit_amount: DEFAULT_DEPOSIT,
       deposit_paid: false,
       deposit_returned: false,
+      is_blogger: false,
     })
     setSaveMessage(null)
     setShowBookingDialog(true)
@@ -467,6 +477,7 @@ ${dateFormatted}
       deposit_amount: booking.deposit_amount || 0,
       deposit_paid: booking.deposit_paid || false,
       deposit_returned: booking.deposit_returned || false,
+      is_blogger: booking.is_blogger || false,
     })
     setSaveMessage(null)
     setShowBookingDialog(true)
@@ -494,6 +505,7 @@ ${dateFormatted}
           deposit_amount: bookingForm.deposit_amount || 0,
           deposit_paid: bookingForm.deposit_paid || false,
           deposit_returned: bookingForm.deposit_returned || false,
+          is_blogger: bookingForm.is_blogger || false,
           updated_at: new Date().toISOString(),
         }).eq("id", editingBooking.id).select()
         saveError = error
@@ -508,6 +520,7 @@ ${dateFormatted}
           deposit_amount: bookingForm.deposit_amount || 0,
           deposit_paid: bookingForm.deposit_paid || false,
           deposit_returned: bookingForm.deposit_returned || false,
+          is_blogger: bookingForm.is_blogger || false,
         }).select()
         saveError = error
       }
@@ -846,6 +859,22 @@ ${dateFormatted}
   </div>
   <p className="text-2xl font-bold text-stone-800">{confirmedThisMonth.length}</p>
 </Card>
+      <Card
+  className="p-5 cursor-pointer hover:ring-2 hover:ring-purple-300 transition-all bg-purple-50 border-purple-200"
+  onClick={() => {
+    if (bloggersThisMonth.length > 0) {
+      setBookingsForSelectedDay(bloggersThisMonth)
+      setShowBookingListDialog(true)
+    }
+  }}
+>
+  <div className="flex items-center justify-between mb-2">
+    <span className="text-sm text-purple-700">بلوقرز هذا الشهر</span>
+    <Megaphone className="w-5 h-5 text-purple-500" />
+  </div>
+  <p className="text-2xl font-bold text-purple-800">{bloggersThisMonth.length}</p>
+  <p className="text-xs text-purple-500 mt-1">الإجمالي الكلي: {bloggersAllTime.length}</p>
+</Card>
     </div>
 
     {/* Upcoming bookings */}
@@ -1034,6 +1063,11 @@ ${dateFormatted}
           const found = dateStatuses.find((s) => s.date === dateStr)
           return found?.status || "available"
         }
+        // هل فيه حجز بلوقر/معلن بهذا اليوم؟ (لون داخلي خاص بالأدمن فقط، ما يظهر للعملاء بالموقع العام)
+        const dayHasBlogger = (day: number): boolean => {
+          const dateStr = `${bookingsMonth.getFullYear()}-${String(bookingsMonth.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+          return getBookingsForDate(dateStr).some((b) => b.is_blogger)
+        }
         return (
           <div className="grid grid-cols-7 gap-1">
             {Array.from({ length: bStartingDay }).map((_, i) => (
@@ -1042,6 +1076,7 @@ ${dateFormatted}
             {Array.from({ length: bDaysInMonth }).map((_, i) => {
               const day = i + 1
               const status = getDayStatus(day)
+              const isBlogger = dayHasBlogger(day)
 
               return (
                 <button
@@ -1050,13 +1085,14 @@ ${dateFormatted}
                   className={`
                     aspect-square rounded-lg flex flex-col items-center justify-center text-sm font-medium transition-all
                     hover:ring-2 hover:ring-stone-400 cursor-pointer relative
-                    ${status === "available" ? "bg-green-100 text-green-800 hover:bg-green-200" : ""}
-                    ${status === "pending" ? "bg-amber-100 text-amber-800 hover:bg-amber-200" : ""}
-                    ${status === "confirmed" ? "bg-red-100 text-red-800 hover:bg-red-200" : ""}
+                    ${isBlogger ? "bg-purple-100 text-purple-800 hover:bg-purple-200" : ""}
+                    ${!isBlogger && status === "available" ? "bg-green-100 text-green-800 hover:bg-green-200" : ""}
+                    ${!isBlogger && status === "pending" ? "bg-amber-100 text-amber-800 hover:bg-amber-200" : ""}
+                    ${!isBlogger && status === "confirmed" ? "bg-red-100 text-red-800 hover:bg-red-200" : ""}
                   `}
                 >
                   <span>{day}</span>
-                  <div className={`w-2 h-2 rounded-full mt-1 ${getStatusColor(status)}`} />
+                  <div className={`w-2 h-2 rounded-full mt-1 ${isBlogger ? "bg-purple-500" : getStatusColor(status)}`} />
                 </button>
               )
             })}
@@ -1065,7 +1101,7 @@ ${dateFormatted}
       })()}
 
       {/* Legend */}
-      <div className="flex items-center justify-center gap-6 mt-6 text-sm">
+      <div className="flex items-center justify-center gap-6 mt-6 text-sm flex-wrap">
         <div className="flex items-center gap-2">
           <div className={`w-3 h-3 rounded-full ${getStatusColor("available")}`} />
           <span className="text-stone-600">متاح</span>
@@ -1077,6 +1113,10 @@ ${dateFormatted}
         <div className="flex items-center gap-2">
           <div className={`w-3 h-3 rounded-full ${getStatusColor("confirmed")}`} />
           <span className="text-stone-600">محجوز</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-purple-500" />
+          <span className="text-stone-600">بلوقر / معلن (داخلي فقط)</span>
         </div>
       </div>
 
@@ -1498,6 +1538,16 @@ ${dateFormatted}
                   <SelectItem value="available">متاح</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="flex items-center gap-2 p-3 bg-purple-50 rounded-lg">
+              <input
+                type="checkbox"
+                id="is_blogger"
+                checked={bookingForm.is_blogger || false}
+                onChange={(e) => setBookingForm({ ...bookingForm, is_blogger: e.target.checked })}
+              />
+              <Label htmlFor="is_blogger" className="text-purple-800">حجز بلوقر / معلن (تسويقي)</Label>
             </div>
 
             {/* Deposit / Insurance fields */}
